@@ -14,24 +14,18 @@ const statusMessage = document.getElementById('status-message');
 let isAuthenticated = false;
 let currentDocId = null;
 let debounceTimeout = null;
+let tokenClient = null;
+let accessToken = null;
 
 // Initialize the Google API client
 function initClient() {
     gapi.client.init({
         apiKey: API_KEY,
-        clientId: CLIENT_ID,
         discoveryDocs: DISCOVERY_DOCS,
-        scope: SCOPES
     }).then(() => {
-        // Listen for sign-in state changes
-        gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
-        
-        // Handle the initial sign-in state
-        updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
-        
         // Attach click handler to the login button
-        googleLoginBtn.addEventListener('click', handleAuthClick);
-        
+        googleLoginBtn.addEventListener('click', initTokenClientAndLogin);
+
         // Set up auto-save functionality
         editor.addEventListener('input', debounceAutoSave);
     }).catch(error => {
@@ -40,14 +34,35 @@ function initClient() {
     });
 }
 
+// Setup Google Identity Services token client and login
+function initTokenClientAndLogin() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (tokenResponse) => {
+            if (tokenResponse.access_token) {
+                accessToken = tokenResponse.access_token;
+                gapi.client.setToken({ access_token: accessToken });
+                isAuthenticated = true;
+                updateSigninStatus(true);
+                showStatus("Signed in");
+            } else {
+                showStatus("Failed to get access token");
+            }
+        }
+    });
+
+    tokenClient.requestAccessToken();
+}
+
 // Update UI based on authentication status
 function updateSigninStatus(isSignedIn) {
     isAuthenticated = isSignedIn;
-    
+
     if (isSignedIn) {
         // Hide login overlay
         loginOverlay.classList.add('hidden');
-        
+
         // Check if we have a document or need to create one
         checkForExistingDoc();
     } else {
@@ -56,18 +71,13 @@ function updateSigninStatus(isSignedIn) {
     }
 }
 
-// Handle login button click
-function handleAuthClick() {
-    if (!isAuthenticated) {
-        gapi.auth2.getAuthInstance().signIn();
-    }
-}
+// This function is no longer needed as we're using initTokenClientAndLogin directly
 
 // Check for existing document or create a new one
 function checkForExistingDoc() {
     // Try to get the document ID from localStorage
     const savedDocId = localStorage.getItem('miniDocsDocId');
-    
+
     if (savedDocId) {
         currentDocId = savedDocId;
         loadDocument(currentDocId);
@@ -98,7 +108,7 @@ function loadDocument(docId) {
         // Extract text content from the document
         const doc = response.result;
         let content = '';
-        
+
         if (doc.body && doc.body.content) {
             doc.body.content.forEach(item => {
                 if (item.paragraph && item.paragraph.elements) {
@@ -110,7 +120,7 @@ function loadDocument(docId) {
                 }
             });
         }
-        
+
         // Update editor with content
         editor.innerHTML = content;
         showStatus('Document loaded');
@@ -123,16 +133,16 @@ function loadDocument(docId) {
 // Save content to Google Doc
 function saveToGoogleDocs() {
     if (!currentDocId || !isAuthenticated) return;
-    
+
     const content = editor.innerHTML;
-    
+
     // Create a batch update request
     const requests = [{
         replaceAllContent: {
             text: content
         }
     }];
-    
+
     gapi.client.docs.documents.batchUpdate({
         documentId: currentDocId,
         requests: requests
@@ -156,7 +166,7 @@ function debounceAutoSave() {
 function showStatus(message) {
     statusMessage.textContent = message;
     statusMessage.classList.add('visible');
-    
+
     setTimeout(() => {
         statusMessage.classList.remove('visible');
     }, 3000);
@@ -164,7 +174,7 @@ function showStatus(message) {
 
 // Load the Google API client
 function loadGoogleApi() {
-    gapi.load('client:auth2', initClient);
+    gapi.load('client', initClient);
 }
 
 // Initialize when the page loads
