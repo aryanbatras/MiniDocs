@@ -146,20 +146,23 @@ function getDocumentLength(doc) {
 function saveToGoogleDocs() {
     if (!currentDocId || !isAuthenticated) return;
 
+    const content = editor.innerText;
+
     gapi.client.docs.documents.get({
         documentId: currentDocId
     }).then(response => {
         const doc = response.result;
-        const docLength = getDocumentLength(doc);
-        const safeEndIndex = docLength > 1 ? docLength - 1 : 1;
-        const content = editor.innerText;
+
+        // Get actual max endIndex
+        const lastElement = doc.body.content[doc.body.content.length - 1];
+        const maxEndIndex = (lastElement?.endIndex ?? 1) - 1;
 
         const requests = [
             {
                 deleteContentRange: {
                     range: {
                         startIndex: 1,
-                        endIndex: safeEndIndex
+                        endIndex: maxEndIndex // avoid deleting final newline
                     }
                 }
             },
@@ -173,18 +176,15 @@ function saveToGoogleDocs() {
             }
         ];
 
-        gapi.client.docs.documents.batchUpdate({
+        return gapi.client.docs.documents.batchUpdate({
             documentId: currentDocId,
             requests: requests
-        }).then(() => {
-            showStatus('Document saved');
-        }).catch(error => {
-            showStatus('Error saving document: ' + error.result.error.message);
-            console.error('Error saving document:', error);
         });
+    }).then(() => {
+        showStatus('Document saved');
     }).catch(error => {
-        showStatus('Error reading document for update: ' + error.result.error.message);
-        console.error('Error fetching document:', error);
+        showStatus('Error saving document: ' + (error.result?.error?.message || error.message));
+        console.error('Error saving document:', error);
     });
 }
 
