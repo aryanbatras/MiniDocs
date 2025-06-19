@@ -151,6 +151,7 @@ function saveToGoogleDocs() {
     }).then(response => {
         const doc = response.result;
         const docLength = getDocumentLength(doc);
+        const safeEndIndex = docLength > 1 ? docLength - 1 : 1;
         const content = editor.innerText;
 
         const requests = [
@@ -158,7 +159,7 @@ function saveToGoogleDocs() {
                 deleteContentRange: {
                     range: {
                         startIndex: 1,
-                        endIndex: docLength
+                        endIndex: safeEndIndex
                     }
                 }
             },
