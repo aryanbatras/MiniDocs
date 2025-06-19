@@ -141,7 +141,7 @@ function saveToGoogleDocs() {
             deleteContentRange: {
                 range: {
                     startIndex: 1,
-                    endIndex: Number.MAX_SAFE_INTEGER
+                    endIndex: 999999
                 }
             }
         },
