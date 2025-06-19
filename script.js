@@ -1,6 +1,6 @@
 // Google API configuration
-const API_KEY = 'YOUR_API_KEY'; // Replace with your actual API key
-const CLIENT_ID = 'YOUR_CLIENT_ID'; // Replace with your actual client ID
+const API_KEY = 'AIzaSyATBmW55Otr0eNRlO07wtkcg06ECfPCzcY'; // Replace with your actual API key
+const CLIENT_ID = '422794837643-q153tedtes9n5sdg4557dv2c0asukqua.apps.googleusercontent.com'; // Replace with your actual client ID
 const DISCOVERY_DOCS = ['https://docs.googleapis.com/$discovery/rest?version=v1'];
 const SCOPES = 'https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/drive.file';
 
