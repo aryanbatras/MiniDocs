@@ -122,7 +122,7 @@ function loadDocument(docId) {
         }
 
         // Update editor with content
-        editor.innerHTML = content;
+        editor.innerText = content;
         showStatus('Document loaded');
     }).catch(error => {
         showStatus('Error loading document: ' + error.result.error.message);
@@ -134,14 +134,26 @@ function loadDocument(docId) {
 function saveToGoogleDocs() {
     if (!currentDocId || !isAuthenticated) return;
 
-    const content = editor.innerHTML;
+    const content = editor.innerText;
 
-    // Create a batch update request
-    const requests = [{
-        replaceAllContent: {
-            text: content
+    const requests = [
+        {
+            deleteContentRange: {
+                range: {
+                    startIndex: 1,
+                    endIndex: Number.MAX_SAFE_INTEGER
+                }
+            }
+        },
+        {
+            insertText: {
+                location: {
+                    index: 1
+                },
+                text: content
+            }
         }
-    }];
+    ];
 
     gapi.client.docs.documents.batchUpdate({
         documentId: currentDocId,
