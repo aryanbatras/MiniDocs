@@ -130,39 +130,60 @@ function loadDocument(docId) {
     });
 }
 
+// Get the document length
+function getDocumentLength(doc) {
+    let lastIndex = 1;
+    if (doc.body && doc.body.content) {
+        const lastElement = doc.body.content[doc.body.content.length - 1];
+        if (lastElement.endIndex !== undefined) {
+            lastIndex = lastElement.endIndex;
+        }
+    }
+    return lastIndex;
+}
+
 // Save content to Google Doc
 function saveToGoogleDocs() {
     if (!currentDocId || !isAuthenticated) return;
 
-    const content = editor.innerText;
+    gapi.client.docs.documents.get({
+        documentId: currentDocId
+    }).then(response => {
+        const doc = response.result;
+        const docLength = getDocumentLength(doc);
+        const content = editor.innerText;
 
-    const requests = [
-        {
-            deleteContentRange: {
-                range: {
-                    startIndex: 1,
-                    endIndex: 999999
+        const requests = [
+            {
+                deleteContentRange: {
+                    range: {
+                        startIndex: 1,
+                        endIndex: docLength
+                    }
+                }
+            },
+            {
+                insertText: {
+                    location: {
+                        index: 1
+                    },
+                    text: content
                 }
             }
-        },
-        {
-            insertText: {
-                location: {
-                    index: 1
-                },
-                text: content
-            }
-        }
-    ];
+        ];
 
-    gapi.client.docs.documents.batchUpdate({
-        documentId: currentDocId,
-        requests: requests
-    }).then(() => {
-        showStatus('Document saved');
+        gapi.client.docs.documents.batchUpdate({
+            documentId: currentDocId,
+            requests: requests
+        }).then(() => {
+            showStatus('Document saved');
+        }).catch(error => {
+            showStatus('Error saving document: ' + error.result.error.message);
+            console.error('Error saving document:', error);
+        });
     }).catch(error => {
-        showStatus('Error saving document: ' + error.result.error.message);
-        console.error('Error saving document:', error);
+        showStatus('Error reading document for update: ' + error.result.error.message);
+        console.error('Error fetching document:', error);
     });
 }
 
