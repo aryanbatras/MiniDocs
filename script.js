@@ -245,9 +245,33 @@ function uploadImageToDrive(file, position) {
     reader.readAsArrayBuffer(file);
 }
 
+// function insertImageIntoDoc(imageUrl, position) {
+//     if (!currentDocumentId) return;
+//
+//     gapi.client.docs.documents.batchUpdate({
+//         documentId: currentDocumentId,
+//         requests: [{
+//             insertInlineImage: {
+//                 location: { index: position + 1 },
+//                 uri: imageUrl,
+//                 objectSize: {
+//                     height: { magnitude: 200, unit: 'PT' },
+//                     width: { magnitude: 300, unit: 'PT' }
+//                 }
+//             }
+//         }]
+//     }).then(() => {
+//         displayStatusMessage('Image added to doc');
+//     }).catch(err => {
+//         displayStatusMessage('Insert image failed');
+//         console.error(err);
+//     });
+// }
+
 function insertImageIntoDoc(imageUrl, position) {
     if (!currentDocumentId) return;
 
+    // 1. Insert image into Google Doc at specified position
     gapi.client.docs.documents.batchUpdate({
         documentId: currentDocumentId,
         requests: [{
@@ -262,11 +286,29 @@ function insertImageIntoDoc(imageUrl, position) {
         }]
     }).then(() => {
         displayStatusMessage('Image added to doc');
+
+        // 2. Also insert image into the editor DOM where the user's cursor is
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.style.maxWidth = '300px';
+        img.style.maxHeight = '200px';
+
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(img);
+        } else {
+            // If no selection (just fallback to end)
+            editorElement.appendChild(img);
+        }
+
     }).catch(err => {
         displayStatusMessage('Insert image failed');
         console.error(err);
     });
 }
+
 
 //=============================================================================
 // UTILITY FUNCTIONS
