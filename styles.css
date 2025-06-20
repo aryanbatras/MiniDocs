@@ -70,9 +70,9 @@ body {
     background-color: #1a1a1a;
     color: #e0e0e0;
     font-family: 'Arial', sans-serif;
-    height: 100vh;
-    width: 100vw;
-    overflow: hidden; /* Hide scrollbars */
+    min-height: 100vh;
+    width: 100%;
+    overflow: auto; /* Enable scrolling */
     display: flex;
     flex-direction: column;
 }
@@ -84,12 +84,33 @@ body {
     outline: none; /* Remove focus outline */
     font-size: 1.2rem;
     line-height: 1.6;
-    caret-color: transparent; /* Hide cursor */
+    caret-color: #e0e0e0; /* Visible cursor that matches text color */
+    overflow-y: auto; /* Enable scrolling within the editor */
+    transition: background-color 0.3s ease;
 }
 
-/* Hide scrollbars for different browsers */
+/* Highlight style for drag and drop */
+#editor.highlight {
+    background-color: #2a2a2a;
+    border: 2px dashed #4285F4;
+}
+
+/* Scrollbar styling for better visibility */
 ::-webkit-scrollbar {
-    display: none;
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #2a2a2a;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #777;
 }
 
 /* Status message styling */

@@ -1,120 +1,273 @@
+/**
+ * MiniDocs - A simple, distraction-free document editor with Google Docs integration
+ * 
+ * This script handles the core functionality of the MiniDocs application:
+ * - Google API authentication
+ * - Document creation, loading, and saving
+ * - Auto-save functionality
+ * - Status notifications
+ */
+
+//=============================================================================
+// CONFIGURATION
+//=============================================================================
+
 // Google API configuration
 const API_KEY = 'AIzaSyATBmW55Otr0eNRlO07wtkcg06ECfPCzcY'; // Replace with your actual API key
 const CLIENT_ID = '422794837643-q153tedtes9n5sdg4557dv2c0asukqua.apps.googleusercontent.com'; // Replace with your actual client ID
 const DISCOVERY_DOCS = ['https://docs.googleapis.com/$discovery/rest?version=v1'];
 const SCOPES = 'https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/drive.file';
 
-// DOM elements
-const editor = document.getElementById('editor');
-const loginOverlay = document.getElementById('login-overlay');
-const googleLoginBtn = document.getElementById('google-login-btn');
-const statusMessage = document.getElementById('status-message');
+//=============================================================================
+// DOM ELEMENTS
+//=============================================================================
+
+const editorElement = document.getElementById('editor');
+const loginOverlayElement = document.getElementById('login-overlay');
+const googleLoginButton = document.getElementById('google-login-btn');
+const statusMessageElement = document.getElementById('status-message');
+
+//=============================================================================
+// APPLICATION STATE
+//=============================================================================
+
+// Authentication state
+let isUserAuthenticated = false;
+let googleTokenClient = null;
+let userAccessToken = null;
+let tokenRefreshTimeout = null;
 
 // Document state
-let isAuthenticated = false;
-let currentDocId = null;
-let debounceTimeout = null;
-let tokenClient = null;
-let accessToken = null;
+let currentDocumentId = null;
+let autoSaveTimeout = null;
 
-// Initialize the Google API client
-function initClient() {
+//=============================================================================
+// AUTHENTICATION FUNCTIONS
+//=============================================================================
+
+/**
+ * Initialize the Google API client
+ * Sets up event listeners and prepares the application
+ */
+function initializeGoogleApiClient() {
     gapi.client.init({
         apiKey: API_KEY,
         discoveryDocs: DISCOVERY_DOCS,
     }).then(() => {
         // Attach click handler to the login button
-        googleLoginBtn.addEventListener('click', initTokenClientAndLogin);
+        googleLoginButton.addEventListener('click', authenticateWithGoogle);
 
         // Set up auto-save functionality
-        editor.addEventListener('input', debounceAutoSave);
+        editorElement.addEventListener('input', scheduleAutoSave);
+
+        // Set up drag and drop functionality for images
+        setupDragAndDropForImages();
     }).catch(error => {
-        showStatus('Error initializing Google API: ' + error.details);
+        displayStatusMessage('Error initializing Google API: ' + error.details);
         console.error('Error initializing Google API:', error);
     });
 }
 
-// Setup Google Identity Services token client and login
-function initTokenClientAndLogin() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
+/**
+ * Set up drag and drop event listeners for images
+ */
+function setupDragAndDropForImages() {
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        editorElement.addEventListener(eventName, preventDefaults, false);
+    });
+
+    // Highlight drop area when item is dragged over it
+    ['dragenter', 'dragover'].forEach(eventName => {
+        editorElement.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        editorElement.addEventListener(eventName, unhighlight, false);
+    });
+
+    // Handle dropped files
+    editorElement.addEventListener('drop', handleDrop, false);
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    function highlight() {
+        editorElement.classList.add('highlight');
+    }
+
+    function unhighlight() {
+        editorElement.classList.remove('highlight');
+    }
+
+    /**
+     * Handle dropped files
+     * @param {Event} e - The drop event
+     */
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0 && isUserAuthenticated) {
+            // Get the current cursor position or use the end of the document
+            const selection = window.getSelection();
+            let cursorPosition = 0;
+
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const preCaretRange = range.cloneRange();
+                preCaretRange.selectNodeContents(editorElement);
+                preCaretRange.setEnd(range.endContainer, range.endOffset);
+                cursorPosition = preCaretRange.toString().length;
+            }
+
+            // Process each dropped file
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                // Check if the file is an image
+                if (file.type.match('image.*')) {
+                    displayStatusMessage('Uploading image...');
+                    uploadImageToDrive(file, cursorPosition);
+                } else {
+                    displayStatusMessage('Only image files are supported');
+                }
+            }
+        } else if (!isUserAuthenticated) {
+            displayStatusMessage('Please sign in to upload images');
+        }
+    }
+}
+
+/**
+ * Set up Google Identity Services token client and initiate login flow
+ */
+function authenticateWithGoogle() {
+    googleTokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
         callback: (tokenResponse) => {
             if (tokenResponse.access_token) {
-                accessToken = tokenResponse.access_token;
-                gapi.client.setToken({ access_token: accessToken });
-                isAuthenticated = true;
-                updateSigninStatus(true);
-                showStatus("Signed in");
+                userAccessToken = tokenResponse.access_token;
+                gapi.client.setToken({ access_token: userAccessToken });
+                isUserAuthenticated = true;
+                updateUserInterface(true);
+                displayStatusMessage("Successfully signed in");
+
+                // Schedule token refresh after 1 hour
+                scheduleTokenRefresh();
             } else {
-                showStatus("Failed to get access token");
+                displayStatusMessage("Failed to get access token");
             }
         }
     });
 
-    tokenClient.requestAccessToken();
+    googleTokenClient.requestAccessToken();
 }
 
-// Update UI based on authentication status
-function updateSigninStatus(isSignedIn) {
-    isAuthenticated = isSignedIn;
+/**
+ * Schedule token refresh after 1 hour
+ */
+function scheduleTokenRefresh() {
+    // Clear any existing timeout
+    if (tokenRefreshTimeout) {
+        clearTimeout(tokenRefreshTimeout);
+    }
+
+    // Set a new timeout for 1 hour (3600000 ms)
+    tokenRefreshTimeout = setTimeout(() => {
+        refreshToken();
+    }, 3600000);
+}
+
+/**
+ * Refresh the access token
+ */
+function refreshToken() {
+    if (googleTokenClient && isUserAuthenticated) {
+        displayStatusMessage("Refreshing token...");
+        googleTokenClient.requestAccessToken();
+        // The callback in authenticateWithGoogle will handle the new token
+        // and schedule the next refresh
+    }
+}
+
+/**
+ * Update the user interface based on authentication status
+ * 
+ * @param {boolean} isSignedIn - Whether the user is signed in
+ */
+function updateUserInterface(isSignedIn) {
+    isUserAuthenticated = isSignedIn;
 
     if (isSignedIn) {
-        // Hide login overlay
-        loginOverlay.classList.add('hidden');
+        // Hide login overlay when user is authenticated
+        loginOverlayElement.classList.add('hidden');
 
         // Check if we have a document or need to create one
-        checkForExistingDoc();
+        loadExistingOrCreateNewDocument();
     } else {
-        // Show login overlay
-        loginOverlay.classList.remove('hidden');
+        // Show login overlay when user is not authenticated
+        loginOverlayElement.classList.remove('hidden');
     }
 }
 
-// This function is no longer needed as we're using initTokenClientAndLogin directly
+//=============================================================================
+// DOCUMENT MANAGEMENT FUNCTIONS
+//=============================================================================
 
-// Check for existing document or create a new one
-function checkForExistingDoc() {
+/**
+ * Check for an existing document or create a new one
+ * Tries to load a document ID from localStorage, or creates a new document if none exists
+ */
+function loadExistingOrCreateNewDocument() {
     // Try to get the document ID from localStorage
-    const savedDocId = localStorage.getItem('miniDocsDocId');
+    const savedDocumentId = localStorage.getItem('miniDocsDocId');
 
-    if (savedDocId) {
-        currentDocId = savedDocId;
-        loadDocument(currentDocId);
+    if (savedDocumentId) {
+        currentDocumentId = savedDocumentId;
+        loadDocumentContent(currentDocumentId);
     } else {
-        createNewDocument();
+        createNewGoogleDocument();
     }
 }
 
-// Create a new Google Doc
-function createNewDocument() {
+/**
+ * Create a new Google Doc with default title
+ */
+function createNewGoogleDocument() {
     gapi.client.docs.documents.create({
         title: 'MiniDocs Document'
     }).then(response => {
-        currentDocId = response.result.documentId;
-        localStorage.setItem('miniDocsDocId', currentDocId);
-        showStatus('New document created');
+        currentDocumentId = response.result.documentId;
+        localStorage.setItem('miniDocsDocId', currentDocumentId);
+        displayStatusMessage('New document created');
     }).catch(error => {
-        showStatus('Error creating document: ' + error.result.error.message);
+        displayStatusMessage('Error creating document: ' + error.result.error.message);
         console.error('Error creating document:', error);
     });
 }
 
-// Load content from Google Doc
-function loadDocument(docId) {
+/**
+ * Load content from a Google Doc and display it in the editor
+ * 
+ * @param {string} documentId - The ID of the Google Doc to load
+ */
+function loadDocumentContent(documentId) {
     gapi.client.docs.documents.get({
-        documentId: docId
+        documentId: documentId
     }).then(response => {
         // Extract text content from the document
-        const doc = response.result;
-        let content = '';
+        const document = response.result;
+        let documentContent = '';
 
-        if (doc.body && doc.body.content) {
-            doc.body.content.forEach(item => {
+        if (document.body && document.body.content) {
+            document.body.content.forEach(item => {
                 if (item.paragraph && item.paragraph.elements) {
                     item.paragraph.elements.forEach(element => {
                         if (element.textRun && element.textRun.content) {
-                            content += element.textRun.content;
+                            documentContent += element.textRun.content;
                         }
                     });
                 }
@@ -122,19 +275,24 @@ function loadDocument(docId) {
         }
 
         // Update editor with content
-        editor.innerText = content;
-        showStatus('Document loaded');
+        editorElement.innerText = documentContent;
+        displayStatusMessage('Document loaded');
     }).catch(error => {
-        showStatus('Error loading document: ' + error.result.error.message);
+        displayStatusMessage('Error loading document: ' + error.result.error.message);
         console.error('Error loading document:', error);
     });
 }
 
-// Get the document length
-function getDocumentLength(doc) {
+/**
+ * Get the length of a Google Doc
+ * 
+ * @param {Object} document - The Google Doc object
+ * @returns {number} - The length of the document
+ */
+function getDocumentLength(document) {
     let lastIndex = 1;
-    if (doc.body && doc.body.content) {
-        const lastElement = doc.body.content[doc.body.content.length - 1];
+    if (document.body && document.body.content) {
+        const lastElement = document.body.content[document.body.content.length - 1];
         if (lastElement.endIndex !== undefined) {
             lastIndex = lastElement.endIndex;
         }
@@ -142,22 +300,26 @@ function getDocumentLength(doc) {
     return lastIndex;
 }
 
-// Save content to Google Doc
-function saveToGoogleDocs() {
-    if (!currentDocId || !isAuthenticated) return;
+/**
+ * Save the current editor content to Google Docs
+ * Replaces the entire document content with the current editor content
+ */
+function saveDocumentToGoogleDocs() {
+    if (!currentDocumentId || !isUserAuthenticated) return;
 
-    const content = editor.innerText;
+    const editorContent = editorElement.innerText;
 
     gapi.client.docs.documents.get({
-        documentId: currentDocId
+        documentId: currentDocumentId
     }).then(response => {
-        const doc = response.result;
+        const document = response.result;
 
         // Get actual max endIndex
-        const lastElement = doc.body.content[doc.body.content.length - 1];
+        const lastElement = document.body.content[document.body.content.length - 1];
         const maxEndIndex = (lastElement?.endIndex ?? 1) - 1;
 
-        const requests = [
+        // Create batch update request to replace document content
+        const updateRequests = [
             {
                 deleteContentRange: {
                     range: {
@@ -171,45 +333,177 @@ function saveToGoogleDocs() {
                     location: {
                         index: 1
                     },
-                    text: content
+                    text: editorContent
                 }
             }
         ];
 
         return gapi.client.docs.documents.batchUpdate({
-            documentId: currentDocId,
-            requests: requests
+            documentId: currentDocumentId,
+            requests: updateRequests
         });
     }).then(() => {
-        showStatus('Document saved');
+        displayStatusMessage('Document saved');
     }).catch(error => {
-        showStatus('Error saving document: ' + (error.result?.error?.message || error.message));
+        displayStatusMessage('Error saving document: ' + (error.result?.error?.message || error.message));
         console.error('Error saving document:', error);
     });
 }
 
-// Debounce auto-save to prevent too many API calls
-function debounceAutoSave() {
-    clearTimeout(debounceTimeout);
-    debounceTimeout = setTimeout(() => {
-        saveToGoogleDocs();
-    }, 2000); // Save after 2 seconds of inactivity
+//=============================================================================
+// IMAGE HANDLING FUNCTIONS
+//=============================================================================
+
+/**
+ * Upload an image file to Google Drive
+ * 
+ * @param {File} file - The image file to upload
+ * @param {number} cursorPosition - The position in the document to insert the image
+ */
+function uploadImageToDrive(file, cursorPosition) {
+    const metadata = {
+        name: file.name,
+        mimeType: file.type
+    };
+
+    const reader = new FileReader();
+    reader.readAsArrayBuffer(file);
+    reader.onload = function(e) {
+        const base64Data = btoa(
+            new Uint8Array(e.target.result)
+                .reduce((data, byte) => data + String.fromCharCode(byte), '')
+        );
+
+        // Upload the image to Google Drive
+        gapi.client.request({
+            path: 'https://www.googleapis.com/upload/drive/v3/files',
+            method: 'POST',
+            params: {
+                uploadType: 'multipart'
+            },
+            headers: {
+                'Content-Type': 'multipart/related; boundary=boundary'
+            },
+            body: '--boundary\r\n' +
+                  'Content-Type: application/json\r\n\r\n' +
+                  JSON.stringify(metadata) + '\r\n' +
+                  '--boundary\r\n' +
+                  'Content-Type: ' + file.type + '\r\n' +
+                  'Content-Transfer-Encoding: base64\r\n\r\n' +
+                  base64Data + '\r\n' +
+                  '--boundary--'
+        }).then(function(response) {
+            const fileId = response.result.id;
+            // Make the file publicly accessible
+            gapi.client.drive.permissions.create({
+                fileId: fileId,
+                resource: {
+                    role: 'reader',
+                    type: 'anyone'
+                }
+            }).then(function() {
+                // Get the file's web content link
+                gapi.client.drive.files.get({
+                    fileId: fileId,
+                    fields: 'webContentLink'
+                }).then(function(response) {
+                    const imageUrl = response.result.webContentLink;
+                    // Insert the image into the Google Doc
+                    insertImageIntoDoc(imageUrl, cursorPosition);
+                    displayStatusMessage('Image uploaded successfully');
+                }).catch(function(error) {
+                    displayStatusMessage('Error getting image URL: ' + error.message);
+                    console.error('Error getting image URL:', error);
+                });
+            }).catch(function(error) {
+                displayStatusMessage('Error setting permissions: ' + error.message);
+                console.error('Error setting permissions:', error);
+            });
+        }).catch(function(error) {
+            displayStatusMessage('Error uploading image: ' + error.message);
+            console.error('Error uploading image:', error);
+        });
+    };
 }
 
-// Show status message
-function showStatus(message) {
-    statusMessage.textContent = message;
-    statusMessage.classList.add('visible');
+/**
+ * Insert an image into the Google Doc at the specified position
+ * 
+ * @param {string} imageUrl - The URL of the image to insert
+ * @param {number} cursorPosition - The position in the document to insert the image
+ */
+function insertImageIntoDoc(imageUrl, cursorPosition) {
+    if (!currentDocumentId || !isUserAuthenticated) return;
+
+    // Create a batch update request to insert the image
+    const requests = [
+        {
+            insertInlineImage: {
+                location: {
+                    index: cursorPosition + 1 // +1 to account for the initial paragraph marker
+                },
+                uri: imageUrl,
+                objectSize: {
+                    height: {
+                        magnitude: 200,
+                        unit: 'PT'
+                    },
+                    width: {
+                        magnitude: 300,
+                        unit: 'PT'
+                    }
+                }
+            }
+        }
+    ];
+
+    gapi.client.docs.documents.batchUpdate({
+        documentId: currentDocumentId,
+        requests: requests
+    }).then(() => {
+        // Reload the document content to show the inserted image
+        loadDocumentContent(currentDocumentId);
+    }).catch(error => {
+        displayStatusMessage('Error inserting image: ' + (error.result?.error?.message || error.message));
+        console.error('Error inserting image:', error);
+    });
+}
+
+//=============================================================================
+// UTILITY FUNCTIONS
+//=============================================================================
+
+/**
+ * Schedule auto-save with debounce to prevent too many API calls
+ * Waits for user to stop typing before saving
+ */
+function scheduleAutoSave() {
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(() => {
+        saveDocumentToGoogleDocs();
+    }, 2500); // Save after 2 seconds of inactivity
+}
+
+/**
+ * Display a temporary status message to the user
+ * 
+ * @param {string} message - The message to display
+ */
+function displayStatusMessage(message) {
+    statusMessageElement.textContent = message;
+    statusMessageElement.classList.add('visible');
 
     setTimeout(() => {
-        statusMessage.classList.remove('visible');
-    }, 3000);
+        statusMessageElement.classList.remove('visible');
+    }, 1000);
 }
 
-// Load the Google API client
-function loadGoogleApi() {
-    gapi.load('client', initClient);
+/**
+ * Load the Google API client and initialize the application
+ */
+function loadGoogleApiAndInitialize() {
+    gapi.load('client', initializeGoogleApiClient);
 }
 
-// Initialize when the page loads
-window.onload = loadGoogleApi;
+// Initialize the application when the page loads
+window.onload = loadGoogleApiAndInitialize;
