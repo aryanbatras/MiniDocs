@@ -390,11 +390,11 @@ function loadDocumentContent(documentId) {
         editorElement.innerHTML = '';
 
         // Extract content from the document
-        const document = response.result;
+        const gdocument = response.result;
 
-        if (document.body && document.body.content) {
+        if (gdocument.body && gdocument.body.content) {
             // Process each structural element
-            document.body.content.forEach(item => {
+            gdocument.body.content.forEach(item => {
                 if (item.paragraph && item.paragraph.elements) {
                     let paragraphText = '';
 
@@ -406,7 +406,7 @@ function loadDocumentContent(documentId) {
                         } else if (element.inlineObjectElement && element.inlineObjectElement.inlineObjectId) {
                             // Image content
                             const objectId = element.inlineObjectElement.inlineObjectId;
-                            const inlineObject = document.inlineObjects[objectId];
+                            const inlineObject = gdocument.inlineObjects[objectId];
 
                             if (inlineObject && inlineObject.inlineObjectProperties && 
                                 inlineObject.inlineObjectProperties.embeddedObject && 
@@ -425,13 +425,13 @@ function loadDocumentContent(documentId) {
                                 if (fileId) {
                                     // If we have text content, add it first
                                     if (paragraphText.trim()) {
-                                        const textNode = document.createTextNode(paragraphText);
+                                        const textNode = gdocument.createTextNode(paragraphText);
                                         editorElement.appendChild(textNode);
                                         paragraphText = '';
                                     }
 
                                     // Create and add the image
-                                    const img = document.createElement('img');
+                                    const img = gdocument.createElement('img');
                                     img.src = `https://drive.google.com/uc?export=view&id=${fileId}`;
                                     img.className = 'editor-image';
                                     img.dataset.fileId = fileId;
@@ -456,12 +456,12 @@ function loadDocumentContent(documentId) {
 
                     // Add any remaining text
                     if (paragraphText) {
-                        const textNode = document.createTextNode(paragraphText);
+                        const textNode = gdocument.createTextNode(paragraphText);
                         editorElement.appendChild(textNode);
 
                         // Add a line break after paragraphs
                         if (!paragraphText.endsWith('\n')) {
-                            editorElement.appendChild(document.createElement('br'));
+                            editorElement.appendChild(gdocument.createElement('br'));
                         }
                     }
                 }
