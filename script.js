@@ -5,8 +5,13 @@
 
 const API_KEY = 'AIzaSyATBmW55Otr0eNRlO07wtkcg06ECfPCzcY';
 const CLIENT_ID = '422794837643-q153tedtes9n5sdg4557dv2c0asukqua.apps.googleusercontent.com';
-const DISCOVERY_DOCS = ['https://docs.googleapis.com/$discovery/rest?version=v1'];
-const SCOPES = 'https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/drive.file';
+const DISCOVERY_DOCS = [
+    'https://docs.googleapis.com/$discovery/rest?version=v1',
+    'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
+];
+
+const SCOPES = 'https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive';
+
 
 //=============================================================================
 // DOM ELEMENTS
