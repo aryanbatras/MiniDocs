@@ -127,10 +127,8 @@ function loadDocumentContent(documentId) {
 
         editorElement.innerText = documentText;
         displayStatusMessage('Document loaded');
-        location.reload();
     }).catch(err => {
         displayStatusMessage('Error loading document');
-        location.reload();
         console.error(err);
     });
 }
@@ -166,7 +164,7 @@ function saveDocumentToGoogleDocs() {
         displayStatusMessage('Document saved');
     }).catch(err => {
         displayStatusMessage('Error saving document');
-
+        location.reload();
         console.error(err);
     });
 }
