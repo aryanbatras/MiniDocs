@@ -74,9 +74,19 @@ function authenticateWithGoogle() {
     googleTokenClient.requestAccessToken();
 }
 
+// function scheduleTokenRefresh() {
+//     if (tokenRefreshTimeout) clearTimeout(tokenRefreshTimeout);
+//     tokenRefreshTimeout = setTimeout(() => refreshToken(), 3600000);
+// }
+
 function scheduleTokenRefresh() {
     if (tokenRefreshTimeout) clearTimeout(tokenRefreshTimeout);
-    tokenRefreshTimeout = setTimeout(() => refreshToken(), 3600000);
+
+    // Refresh page at 50 minutes to get new token
+    tokenRefreshTimeout = setTimeout(() => {
+        displayStatusMessage("Refreshing session...");
+        location.reload(); // <--- Simply reload the page
+    },  5000); // 50 minutes
 }
 
 function refreshToken() {
@@ -244,29 +254,6 @@ function uploadImageToDrive(file, position) {
 
     reader.readAsArrayBuffer(file);
 }
-
-// function insertImageIntoDoc(imageUrl, position) {
-//     if (!currentDocumentId) return;
-//
-//     gapi.client.docs.documents.batchUpdate({
-//         documentId: currentDocumentId,
-//         requests: [{
-//             insertInlineImage: {
-//                 location: { index: position + 1 },
-//                 uri: imageUrl,
-//                 objectSize: {
-//                     height: { magnitude: 200, unit: 'PT' },
-//                     width: { magnitude: 300, unit: 'PT' }
-//                 }
-//             }
-//         }]
-//     }).then(() => {
-//         displayStatusMessage('Image added to doc');
-//     }).catch(err => {
-//         displayStatusMessage('Insert image failed');
-//         console.error(err);
-//     });
-// }
 
 function insertImageIntoDoc(imageUrl, position) {
     if (!currentDocumentId) return;
