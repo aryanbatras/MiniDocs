@@ -65,31 +65,12 @@ function authenticateWithGoogle() {
                 isUserAuthenticated = true;
                 updateUserInterface(true);
                 displayStatusMessage("Signed in");
-                scheduleTokenRefresh();
             } else {
                 displayStatusMessage("Failed to sign in");
             }
         }
     });
     googleTokenClient.requestAccessToken();
-}
-
-function scheduleTokenRefresh() {
-    if (tokenRefreshTimeout) clearTimeout(tokenRefreshTimeout);
-
-    // Refresh page at 50 minutes to get new token
-    tokenRefreshTimeout = setTimeout(() => {
-        displayStatusMessage("Refreshing session...");
-        displayStatusMessage("Refreshing session...");
-        location.reload();
-    }, 58 * 60 * 1000);
-}
-
-function refreshToken() {
-    if (googleTokenClient && isUserAuthenticated) {
-        displayStatusMessage("Refreshing token...");
-        googleTokenClient.requestAccessToken();
-    }
 }
 
 function updateUserInterface(isSignedIn) {
@@ -146,8 +127,10 @@ function loadDocumentContent(documentId) {
 
         editorElement.innerText = documentText;
         displayStatusMessage('Document loaded');
+        location.reload();
     }).catch(err => {
         displayStatusMessage('Error loading document');
+        location.reload();
         console.error(err);
     });
 }
@@ -183,6 +166,7 @@ function saveDocumentToGoogleDocs() {
         displayStatusMessage('Document saved');
     }).catch(err => {
         displayStatusMessage('Error saving document');
+
         console.error(err);
     });
 }
