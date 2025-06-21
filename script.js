@@ -74,19 +74,15 @@ function authenticateWithGoogle() {
     googleTokenClient.requestAccessToken();
 }
 
-// function scheduleTokenRefresh() {
-//     if (tokenRefreshTimeout) clearTimeout(tokenRefreshTimeout);
-//     tokenRefreshTimeout = setTimeout(() => refreshToken(), 3600000);
-// }
-
 function scheduleTokenRefresh() {
     if (tokenRefreshTimeout) clearTimeout(tokenRefreshTimeout);
 
     // Refresh page at 50 minutes to get new token
     tokenRefreshTimeout = setTimeout(() => {
         displayStatusMessage("Refreshing session...");
-        location.reload(); // <--- Simply reload the page
-    },  5000); // 50 minutes
+        displayStatusMessage("Refreshing session...");
+        location.reload();
+    }, 58 * 60 * 1000);
 }
 
 function refreshToken() {
@@ -274,21 +270,9 @@ function insertImageIntoDoc(imageUrl, position) {
     }).then(() => {
         displayStatusMessage('Image added to doc');
 
-        // 2. Also insert image into the editor DOM where the user's cursor is
-        const img = document.createElement('img');
-        img.src = imageUrl;
-        img.style.maxWidth = '300px';
-        img.style.maxHeight = '200px';
-
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            range.deleteContents();
-            range.insertNode(img);
-        } else {
-            // If no selection (just fallback to end)
-            editorElement.appendChild(img);
-        }
+        // Instead of inserting actual <img> tag in DOM editor, just put placeholder text
+        const placeholder = document.createTextNode(`\n[Image: ${imageUrl}]\n`);
+        editorElement.appendChild(placeholder);
 
     }).catch(err => {
         displayStatusMessage('Insert image failed');
@@ -309,7 +293,7 @@ function scheduleAutoSave() {
 function displayStatusMessage(msg) {
     statusMessageElement.textContent = msg;
     statusMessageElement.classList.add('visible');
-    setTimeout(() => statusMessageElement.classList.remove('visible'), 1000);
+    setTimeout(() => statusMessageElement.classList.remove('visible'), 2000);
 }
 
 function loadGoogleApiAndInitialize() {
